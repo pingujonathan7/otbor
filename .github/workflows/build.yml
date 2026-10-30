@@ -1,0 +1,48 @@
+name: build
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyInstaller
+        run: pip install pyinstaller
+
+      - name: Build app
+        run: |
+          pyinstaller --noconfirm --windowed \
+            --name "ОТБОР" \
+            --osx-bundle-identifier com.pingujonathan7.otbor \
+            otbor.py
+          APP="dist/ОТБОР.app"
+          PL="$APP/Contents/Info.plist"
+          plutil -replace NSAppleEventsUsageDescription -string \
+            "ОТБОР открывает Google Картинки в Chrome, читает выдачу и убирает кандидатов в Корзину." "$PL"
+          VER="$(grep -m1 '^APP_VERSION' otbor.py | cut -d'"' -f2)"
+          plutil -replace CFBundleShortVersionString -string "$VER" "$PL"
+          plutil -replace CFBundleVersion -string "$VER" "$PL"
+          codesign --force --deep -s - "$APP"
+          cd dist && ditto -c -k --keepParent "ОТБОР.app" ../Otbor-macOS.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Otbor-macOS
+          path: Otbor-macOS.zip
+
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: Otbor-macOS.zip
